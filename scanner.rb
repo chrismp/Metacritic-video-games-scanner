@@ -1,177 +1,171 @@
 [
-	"open-uri",
-	"mechanize",
-	"csv"
+	"csv",
+	"mechanize"
 ].each{|g|
 	require g
 }
 
-def openURL(agent,url)
-	p "OPENING #{url}"
+require_relative "./methods.rb"
 
-	retryCount=	0
-	begin
-		page=	agent.get(url)
-	rescue Exception => e
-		if e.to_s.include?"429" or e.to_s.include?"503"
-			sleep 30
-			retry
-		end
+agent=					Mechanize.new
+agent.user_agent_alias=	"Linux Firefox"
 
-		if retryCount > 10
-			return false
-		end
+baseURL=	"http://www.metacritic.com"
 
-		p "ERROR: #{e}"
-
-		if e.to_s.include?"404"
-			return false			
-		end
-
-		sleep 30
-		retryCount+=1
-		retry
-	end
-	return page
-end
-
-def textStrip(tag)
-	return tag===nil ? nil : tag.text.strip
-end
-
-
-albumsCSV=	"Albums.csv"
-artistsCSV=	"Artists.csv"
-criticsCSV=	"CriticReviews.csv"
-genresCSV=	"Genres.csv"
-csvInfoHash= {
-	albumsCSV => [
-		"AlbumURL",
-		"Album",
-		"Artist",
-		"ArtistURL",
-		"Label",
-		"LabelURL",
-		"Summary",
+sysLabel=		ARGV[0]
+gamesCSV=		ARGV[1]
+genresCSV=		ARGV[2]
+publishersCSV=	ARGV[3]
+criticsCSV=		ARGV[4]
+csvInfoHash=	{
+	gamesCSV => [
+		"GameURL",
+		"Title",
+		"SystemLabel",
 		"ReleaseDate",
+		"Developer",
+		"ESRB",
+		"Description",
 		"Metascore",
 		"CriticScores",
 		"UserScore",
 		"UserScores"
 	],
-	criticsCSV => [
-		"Critic",
-		"AlbumURL",
-		"Date",
-		"Score"
-	],
 	genresCSV => [
 		"Genre",
-		"AlbumURL"
+		"GameURL"
+	],
+	publishersCSV => [
+		"PublisherURL",
+		"Publisher",
+		"GameURL"
+	],
+	criticsCSV => [
+		"Critic",
+		"GameURL",
+		"Date",
+		"Score"
 	]
 }
 
-csvInfoHash.each{|fileName,headersArray|
+csvInfoHash.each{|fileName,headerArray|
 	if File.exist?(fileName)!=true
 		CSV.open(fileName,'w') do |csv|
-			csv << headersArray
+			csv << headerArray
 		end
 	end
 }
 
-agent=					Mechanize.new
-agent.user_agent_alias=	"Linux Firefox"
+pgNum=	0
+loop {
+	gameListingURL=		baseURL+"/browse/games/release-date/available/"+sysLabel+"?page="+pgNum.to_s
+	gameListingPage=	openURL(agent, gameListingURL)
+	gameATags=			gameListingPage.css("#main .game_product .product_title a")
+	gameATags.each{|gameATag|
+		gameHref=	gameATag["href"]
+		gameURL=	baseURL+gameHref
+		gamePage=	openURL(agent,gameURL)
 
-baseURL=		"http://www.metacritic.com"
-pgNum=			ARGV[0].to_i
-loop{  
-	albumDirectoryURL=	baseURL+"/browse/albums/release-date/available/date?page="+pgNum.to_s
-	albumDirectoryPage=	openURL(agent,albumDirectoryURL)
-	listProducts=		albumDirectoryPage.css(".list_products")	# `ol` containing `li` elements containing links to album pages
-	if listProducts.length==0
-		break
-	end
-
-	listProducts.css('a').each{|a|
-		albumHref=	a["href"]
-
-		albumExists=	false
-		File.foreach(albumsCSV){|line|	
-			if line.split(',')[0] === albumHref
-				albumExists=	true
-				break
-			end
-		}
-		next if albumExists===true
-
-		albumURL=	baseURL+albumHref
-		next if openURL(agent,albumURL)===false
-
-		albumPage=	openURL(agent,albumURL)
-		album=		textStrip(albumPage.css(".product_title")[0])
-		artist=		textStrip(albumPage.css(".product_artist a")[0])
-		artistHref=	albumPage.css(".product_artist a")[0].attr("href")
-		label=		textStrip(albumPage.css(".product_company .data")[0])
-		labelHref=	albumPage.css(".publisher a")[0]===nil ? nil : albumPage.css(".publisher a")[0].attr("href")
-		summary=	textStrip(albumPage.css(".product_summary .data span"))
-		metascore=	textStrip(albumPage.css(".metascore_summary span[itemprop='ratingValue']")[0])
-		releaseDate=textStrip(albumPage.css("span[itemprop='datePublished']")[0])
-		criticScores=textStrip(albumPage.css(".metascore_summary span[itemprop='reviewCount']")[0])
-		userScore=	textStrip(albumPage.css(".userscore_wrap div.user")[0])
-		userScore=	userScore == "tbd" ? nil : userScore
-		userScores=	nil
-		if userScore != nil
-			userScores=	textStrip(albumPage.css(".userscore_wrap .count a")[0]).gsub(" Ratings",'')	
-		end
-
-		CSV.open(albumsCSV,'a') do |csv|
-			csv << [
-				albumHref,
-				album,
-				artist,
-				artistHref,
-				label,
-				labelHref,
-				summary,
-				releaseDate,
-				metascore,
-				criticScores,
-				userScore,
-				userScores
+		title=			textStrip(gamePage.css("h1 span[itemprop='name']"))
+		systemName=		textStrip(gamePage.css("span[itemprop='device']"))
+		releaseDate=	textStrip(gamePage.css("span[itemprop='datePublished']"))
+		developer=		textStrip(gamePage.css("li.developer span.data"))
+		
+		gamePage.css("li.publisher .data a").each{|a|
+			publisherHref=	a["href"]
+			publisher=		textStrip(a.css("span[itemprop='name']"))
+			CSV.open(publishersCSV, 'a', headers:true) do |csv|
+				row=				CSV::Row.new(csvInfoHash[publishersCSV],[])
+				row["GameURL"]=		gameHref
+				row["Publisher"]=	publisher
+				row["PublisherURL"]=publisherHref
+				csv << row
+			end					
+			p [
+				gameHref,
+				publisherHref,
+				publisher
 			]
+		}
+		
+		description=	textStrip(gamePage.css("span[itemprop='description']")).gsub(/\r|\n/,' ')
+		esrb=			textStrip(gamePage.css("span[itemprop='contentRating']"))
+		metascore=		textStrip(gamePage.css(".metascore_summary span[itemprop='ratingValue']"))
+		criticScores=	metascore==='' ? nil : textStrip(gamePage.css(".metascore_summary span[itemprop='reviewCount']"))
+		userScore=		textStrip(gamePage.css(".userscore_wrap div.user")[0])
+		userScore=		userScore == "tbd" ? nil : userScore
+		userScores=		nil
+		if userScore != nil
+			userScores=	textStrip(gamePage.css(".userscore_wrap .count a")[0]).gsub(" Ratings",'')	
 		end
 
-		albumPage.css(".product_genre .data").each{|genre|
-			CSV.open(genresCSV,'a') do |csv|
-				csv << [
-					genre,
-					albumHref
-				]
+		gamePage.css(".product_genre .data").each{|spanData|
+			genre=	textStrip(spanData)
+			CSV.open(genresCSV, 'a', headers:true) do |csv|
+				row=			CSV::Row.new(csvInfoHash[genresCSV],[])
+				row["GameURL"]=	gameHref
+				row["Genre"]=	genre
+				csv << row
 			end
+			p [
+				gameHref,
+				genre
+			]
 		}
 
-		p album,artist,artistHref,label,labelHref,summary,metascore,criticScores,userScore,userScores,"=="
+		CSV.open(gamesCSV, 'a', headers:true) do |csv|
+			row=				CSV::Row.new(csvInfoHash[gamesCSV],[])
+			row["GameURL"]=		gameHref
+			row["Title"]=		title
+			row["SystemLabel"]=	sysLabel
+			row["ReleaseDate"]=	releaseDate
+			row["Developer"]=	developer
+			row["ESRB"]=		esrb
+			row["Description"]=	description
+			row["Metascore"]=	metascore
+			row["CriticScores"]=criticScores
+			row["UserScore"]=	userScore
+			row["UserScores"]=	userScores
+		end
+		p [
+			gameHref,
+			title,
+			systemName,
+			releaseDate,
+			developer,
+			description,
+			esrb,
+			metascore,
+			criticScores,
+			userScore,
+			userScores
+		]
 
-		criticsURL=	albumURL+"/critic-reviews"
+		criticsURL=	gameURL+"/critic-reviews"
 		next if openURL(agent,criticsURL)===404
 		criticsPage=openURL(agent,criticsURL)
 		criticsPage.css(".critic_review").each{|reviewTag|
 			critic=		textStrip(reviewTag.css(".source")[0])
 			reviewDate=	textStrip(reviewTag.css(".date")[0])
 			criticScore=textStrip(reviewTag.css(".review_grade")[0])
-			CSV.open(criticsCSV,'a') do |csv|
-				csv << [
-					critic,
-					albumHref,
-					reviewDate,
-					criticScore
-				]
+			CSV.open(criticsCSV, 'a', headers:true) do |csv|
+				row=			CSV::Row.new(csvInfoHash[criticsCSV],[])
+				row["Critic"]=	critic
+				row["GameURL"]=	gameHref
+				row["Date"]=	reviewDate
+				row["Score"]=	criticScore
 			end
-			p critic,reviewDate,criticScore
-			p "==="
+			p [
+				critic,
+				gameHref,
+				reviewDate,
+				criticScore
+			]
 		}
 	}
-	p "========"
+
+	break if gameATags.length==0 or gameATags===nil
 	pgNum+=1
 }
+
 p "FINISHED"
