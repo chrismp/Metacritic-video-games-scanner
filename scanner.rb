@@ -60,7 +60,8 @@ pgNum=	0
 loop {
 	gameListingURL=		baseURL+"/browse/games/release-date/available/"+sysLabel+"?page="+pgNum.to_s
 	gameListingPage=	openURL(agent, gameListingURL)
-	gameATags=			gameListingPage.css("#main .game_product .product_title a")
+	gameATags=			gameListingPage.css("#main .product .product_title a")
+
 	gameATags.each{|gameATag|
 		gameHref=	gameATag["href"]
 		gameURL=	baseURL+gameHref
