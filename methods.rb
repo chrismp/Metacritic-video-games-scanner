@@ -1,5 +1,5 @@
 def openURL(agent, url)
-	p "OPENING #{url}"
+	p "OPENING #{url} at #{Time.now}"
 	begin
 		page=	agent.get(url)
 	rescue Exception => e
