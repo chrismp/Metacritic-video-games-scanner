@@ -3,8 +3,11 @@ def openURL(agent, url)
 	begin
 		page=	agent.get(url)
 	rescue Exception => e
+		seconds=	60
 		p "ERROR: #{e}"
-		sleep 60
+		p "RETRYING IN #{seconds} seconds"
+		p "--"
+		sleep seconds
 		retry
 	end
 	return page
