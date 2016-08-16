@@ -127,6 +127,7 @@ loop {
 			row["CriticScores"]=criticScores
 			row["UserScore"]=	userScore
 			row["UserScores"]=	userScores
+			csv << row
 		end
 		p [
 			gameHref,
@@ -155,6 +156,7 @@ loop {
 				row["GameURL"]=	gameHref
 				row["Date"]=	reviewDate
 				row["Score"]=	criticScore
+				csv << row
 			end
 			p [
 				critic,
