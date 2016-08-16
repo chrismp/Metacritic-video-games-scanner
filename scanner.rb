@@ -60,12 +60,25 @@ pgNum=	0
 loop {
 	gameListingURL=		baseURL+"/browse/games/release-date/available/"+sysLabel+"?page="+pgNum.to_s
 	gameListingPage=	openURL(agent, gameListingURL)
-	gameATags=			gameListingPage.css("#main .product .product_title a")
+	if gameListingPage==404
+		p "#{gameListingURL} is 404 error, breaking"
+		break
+	end
+
+	gameATags=	gameListingPage.css("#main .product .product_title a")
+	if gameATags.length==0 or gameATags===nil
+		p "NO MORE GAMES"
+		break
+	end
 
 	gameATags.each{|gameATag|
 		gameHref=	gameATag["href"]
 		gameURL=	baseURL+gameHref
 		gamePage=	openURL(agent,gameURL)
+		if gamePage==404
+			p "#{gameURL} is 404 error, skipping"
+			next
+		end
 
 		title=			textStrip(gamePage.css("h1 span[itemprop='name']"))
 		systemName=		textStrip(gamePage.css("span[itemprop='device']"))
@@ -82,11 +95,11 @@ loop {
 				row["PublisherURL"]=publisherHref
 				csv << row
 			end					
-			p [
-				gameHref,
-				publisherHref,
-				publisher
-			]
+			# p [
+			# 	gameHref,
+			# 	publisherHref,
+			# 	publisher
+			# ]
 		}
 		
 		description=	textStrip(gamePage.css("span[itemprop='description']")).gsub(/\r|\n/,' ')
@@ -108,10 +121,10 @@ loop {
 				row["Genre"]=	genre
 				csv << row
 			end
-			p [
-				gameHref,
-				genre
-			]
+			# p [
+			# 	gameHref,
+			# 	genre
+			# ]
 		}
 
 		CSV.open(gamesCSV, 'a', headers:true) do |csv|
@@ -129,23 +142,27 @@ loop {
 			row["UserScores"]=	userScores
 			csv << row
 		end
-		p [
-			gameHref,
-			title,
-			systemName,
-			releaseDate,
-			developer,
-			description,
-			esrb,
-			metascore,
-			criticScores,
-			userScore,
-			userScores
-		]
+		# p [
+		# 	gameHref,
+		# 	title,
+		# 	systemName,
+		# 	releaseDate,
+		# 	developer,
+		# 	description,
+		# 	esrb,
+		# 	metascore,
+		# 	criticScores,
+		# 	userScore,
+		# 	userScores
+		# ]
 
 		criticsURL=	gameURL+"/critic-reviews"
-		next if openURL(agent,criticsURL)===404
 		criticsPage=openURL(agent,criticsURL)
+		if criticsPage==404
+			p "#{criticsURL} is 404 errorm, skipping"
+			next
+		end
+
 		criticsPage.css(".critic_review").each{|reviewTag|
 			critic=		textStrip(reviewTag.css(".source")[0])
 			reviewDate=	textStrip(reviewTag.css(".date")[0])
@@ -158,16 +175,15 @@ loop {
 				row["Score"]=	criticScore
 				csv << row
 			end
-			p [
-				critic,
-				gameHref,
-				reviewDate,
-				criticScore
-			]
+			# p [
+			# 	critic,
+			# 	gameHref,
+			# 	reviewDate,
+			# 	criticScore
+			# ]
 		}
 	}
 
-	break if gameATags.length==0 or gameATags===nil
 	pgNum+=1
 }
 

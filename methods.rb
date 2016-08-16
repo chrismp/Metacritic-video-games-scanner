@@ -3,7 +3,9 @@ def openURL(agent, url)
 	begin
 		page=	agent.get(url)
 	rescue Exception => e
-		seconds=	60
+		return 404 if e.to_s.include?("404")
+
+		seconds=	30
 		p "ERROR: #{e}"
 		p "RETRYING IN #{seconds} seconds"
 		p "--"
